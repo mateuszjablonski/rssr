@@ -20,7 +20,10 @@ $channel = $rss->addChild('channel');
 $channel->addChild('title', 'Dla Pilota');
 $channel->addChild('link', $base_url);
 $channel->addChild('description', 'Najpopularniejsze źródło informacji na temat małego i dużego lotnictwa');
-$channel->addChild('image')->addChild('url', $logo_url);
+$logo = $channel->addChild('image');
+$logo->addChild('title', 'DlaPilota.pl logo');
+$logo->addChild('url', $logo_url);
+$logo->addChild('link', $logo_url);
 
 foreach ($articles as $article) {
 
@@ -68,11 +71,13 @@ foreach ($articles as $article) {
 $rss_xml = $rss = $rss->asXML();
 
 if (isset($_GET['debug'])) {
+    header('Content-Type: text/html');
     $preview = new DOMDocument;
     $preview->preserveWhiteSpace = false;
     $preview->formatOutput = true;
     $preview->loadXML($rss_xml);
     echo "<pre>" . htmlentities($preview->saveXML())."</pre>";
 } else {
+    header('Content-Type: application/rss+xml');
     echo $rss_xml;
 }
