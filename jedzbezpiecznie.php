@@ -28,7 +28,6 @@ CREATE TABLE IF NOT EXISTS videos (
     timestamp INTEGER NOT NULL,
     date_time_rss TEXT NOT NULL,
     description TEXT NOT NULL,
-    content TEXT NOT NULL,
     image_url TEXT
 );
 EOT;
@@ -88,22 +87,19 @@ foreach ($main_not_present_in_saved as $video_url) {
     $date_time = $date_time->setTimestamp($timestamp);
     $date_time_rss = $date_time->format(DateTime::RSS);
 
-    // extract content
-    $content = $video_json['text_paragraph_lead'];
-
     // extract description
-    $description = $content;
+    $description = $video_json['text_paragraph_lead'];
 
     // extract image url
     $image_url = $video_json['image'][0]['url'];
 
-    // append image to content
-    $content = '<img src="' . $image_url . '"><br>' . $content;
+    // append image to description
+    $description = '<img src="' . $image_url . '"><br>' . $description;
 
-    // add new item to database (url, title, timestamp, date_time_rss, description, content, image_url,)
+    // add new item to database (url, title, timestamp, date_time_rss, description, image_url,)
     $query = <<<EOD
     INSERT INTO videos VALUES 
-    ('$video_url', '$title', $timestamp, '$date_time_rss', '$description', '$content', '$image_url')
+    ('$video_url', '$title', $timestamp, '$date_time_rss', '$description', '$image_url')
     EOD;
     $database->prepare($query)->execute();
 }
@@ -138,7 +134,6 @@ foreach ($final_videos as $video) {
     $item = $channel->addChild('item');
     $item->addChild('title', $video['title']);
     $item->addChild('link', $video['url']);
-    $item->addChild('content:encoded', $video['content']);
     $item->addChild('pubDate', $video['date_time_rss']);
     $item->addChild('description', $video['description']);
 }
