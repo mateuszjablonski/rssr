@@ -28,7 +28,6 @@ CREATE TABLE IF NOT EXISTS articles (
     timestamp INTEGER NOT NULL,
     date_time_rss TEXT NOT NULL,
     description TEXT NOT NULL,
-    content TEXT NOT NULL,
     image_url TEXT
 );
 EOT;
@@ -88,14 +87,11 @@ foreach ($main_not_present_in_saved as $article_url) {
     $timestamp = $date_time->getTimestamp();
     $date_time_rss = $date_time->format(DateTime::RSS);
 
-    // extract content
+    // extract content and set as description
     $content_body = $article_document->querySelector('div.field--name-field-body');
     $content_formatted = $article_document->querySelector('div.field--name-field-text-formatted');
     $content_object = ($content_body ?? $content_formatted);
-    $content = $content_object->innerHTML;
-
-    // extract description (first paragraph)
-    $description = $content_object->querySelector('p')->textContent;
+    $description = $content_object->innerHTML;
 
     // extract image path
     $image_path = $article_document
@@ -103,15 +99,15 @@ foreach ($main_not_present_in_saved as $article_url) {
         ?->getAttribute('src');
     $image_url = $image_path ? $base_url . $image_path : null;
 
-    // append image to content if present
+    // append image to description if present
     if ($image_url) {
-        $content = '<img src="' . $image_url . '"><br>' . $content;
+        $description = '<img src="' . $image_url . '"><br>' . $description;
     }
 
-    // add new item to database (url, title, timestamp, date_time_rss, description, content, image_url,)
+    // add new item to database (url, title, timestamp, date_time_rss, description, image_url,)
     $query = <<<EOD
     INSERT INTO articles VALUES 
-    ('$article_url', '$title', $timestamp, '$date_time_rss', '$description', '$content', '$image_url')
+    ('$article_url', '$title', $timestamp, '$date_time_rss', '$description', '$image_url')
     EOD;
     $database->prepare($query)->execute();
 }
@@ -146,7 +142,6 @@ foreach ($final_articles as $article) {
     $item = $channel->addChild('item');
     $item->addChild('title', $article['title']);
     $item->addChild('link', $article['url']);
-    $item->addChild('content:encoded', $article['content']);
     $item->addChild('pubDate', $article['date_time_rss']);
     $item->addChild('description', $article['description']);
 }
