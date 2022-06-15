@@ -48,15 +48,15 @@ $logo_url = 'https://dlapilota.pl/themes/custom/dlapilota/logo.svg';
 // read main page
 $main_url = $base_url . '/wiadomosci';
 $main_document = new HTML5DOMDocument();
-$main_document->loadHTMLFile($main_url);
-$main_view = $main_document->querySelector('div.view-content');
+$main_document->loadHTMLFile($main_url, HTML5DOMDocument::ALLOW_DUPLICATE_IDS);
+$main_view = $main_document->querySelector('div.view-articles div.view-content');
 $article_cards = $main_view->querySelectorAll('div.card-block');
 
 // extract article URLs from main page
 $main_page_article_urls = array();
 foreach ($article_cards as $article_card) {
     $article_url_path = $article_card
-        ->querySelector('div.field--name-node-title h2 a')
+        ->querySelector('div.field--name-node-title h3 a')
         ?->getAttribute('href');
     $article_url = $base_url . $article_url_path;
     array_push($main_page_article_urls, $article_url);
@@ -116,14 +116,14 @@ foreach ($main_not_present_in_saved as $article_url) {
 $delete_over_limit = <<<EOD
 DELETE FROM articles WHERE
 timestamp NOT IN (
-    SELECT timestamp FROM articles  ORDER BY timestamp DESC LIMIT 30
+    SELECT timestamp FROM articles ORDER BY timestamp DESC LIMIT 30
 )
 EOD;
 $database->prepare($delete_over_limit)->execute();
 
 // read final articles from database
 $final_articles = $database
-    ->query('SELECT * FROM articles')
+    ->query('SELECT * FROM articles ORDER BY timestamp DESC')
     ->fetchAll();
 
 // prepare RSS container
