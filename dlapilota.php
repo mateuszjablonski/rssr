@@ -105,11 +105,14 @@ foreach ($main_not_present_in_saved as $article_url) {
     }
 
     // add new item to database (url, title, timestamp, date_time_rss, description, image_url,)
-    $query = <<<EOD
-    INSERT INTO articles VALUES 
-    ('$article_url', '$title', $timestamp, '$date_time_rss', '$description', '$image_url')
-    EOD;
-    $database->prepare($query)->execute();
+    try {
+        $query = "INSERT OR REPLACE INTO articles VALUES ('$article_url', '$title', $timestamp, '$date_time_rss', '$description', '$image_url')";
+        $database->prepare($query)->execute();
+    } catch (PDOException) {
+        if ($is_debug) {
+            echo 'Failed to insert article at ' . $article_url . '<br>';
+        }
+    }
 }
 
 // sort database and remove excess positions
