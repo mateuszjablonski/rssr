@@ -7,3 +7,13 @@ This repository is a bunch of PHP files, that generate RSS using PHP's DOMDocume
 I am not interested in creating a generic engine, because every site has its quirks, and those PHP files are simple as you know what. Why PHP? Because 99.999% of public hosting services support PHP, so using this magic boils down to copying the file on your server, and adding the URL into your favorite reader.
 
 My favorite reader is [NetNewsWire](https://netnewswire.com/).
+
+## Setup
+
+Project uses PHP Composer to setup dependencies.
+
+```
+brew install --formula php
+brew install --formula composer
+composer install
+```
