@@ -116,7 +116,7 @@ foreach ($main_not_present_in_saved as $article_url) {
 
     // extract content
     $content_body = $article->querySelector('div.newsContent div.text');
-    $description = $content_body->innerHTML;
+    $description = htmlspecialchars($content_body->innerHTML);
 
     // extract image
     $image_path = $article
