@@ -3,6 +3,10 @@
 // define debug flags
 $is_debug = isset($_GET['debug']);
 $log_time = new DateTime();
+if ($is_debug) {
+    error_reporting(~0);
+    ini_set('display_errors', 1);
+} 
 
 // define log function
 function debug_log($message) {
