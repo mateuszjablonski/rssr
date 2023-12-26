@@ -1,21 +1,39 @@
 <?php
 
+// define debug flags
+$is_debug = isset($_GET['debug']);
+$log_time = new DateTime();
+
+// define log function
+function debug_log($message) {
+    global $is_debug, $log_time;
+    if ($is_debug) {
+        $now = new DateTime();
+        $duration = $now->diff($log_time)->format("%s.%F s");
+        error_log("$message ($duration)");
+        echo "<code>[$duration]</code> $message<br>";
+        // $log_time = $now;
+    }
+}
+
+function pretty_dump($object) {
+    global $is_debug;
+    if ($is_debug) {
+        echo "<pre>"; var_dump($object); echo "</pre>";
+    }
+}
+
 // check PHP version, because some APIs are new
 $php_version = phpversion(); 
 if ($php_version < 8) {
     throw new ErrorException('Invalid PHP version: expected >=8.0.0, got ' . $php_version);
 }
 
-// define debug flag
-$is_debug = isset($_GET['debug']);
-$start_time = new DateTime();
-$start_time = $start_time->format('H:i:s:u');
-
 // import Composer dependencies
 require 'vendor/autoload.php';
 use IvoPetkov\HTML5DOMDocument;
 
-// setup database
+// create database if needed
 $database_file = 'dlapilota.sqlite';
 if (!file_exists($database_file)) {
     touch($database_file);
@@ -32,6 +50,7 @@ CREATE TABLE IF NOT EXISTS articles (
 );
 EOT;
 $database->query($table_create_query);
+debug_log("Created database: " . $database_file);
 
 // read existing articles
 $saved_article_urls = $database
@@ -46,11 +65,16 @@ $base_url = 'https://dlapilota.pl';
 $logo_url = 'https://dlapilota.pl/themes/custom/dlapilota/logo.svg';
 
 // read main page
-$main_url = $base_url . '/wiadomosci';
+$main_url = $base_url . "/wiadomosci"."/";
 $main_document = new HTML5DOMDocument();
-$main_document->loadHTMLFile($main_url, HTML5DOMDocument::ALLOW_DUPLICATE_IDS);
+$stream_context = stream_context_create(["ssl"=>["verify_peer"=>false]]);
+$main_document->loadHTMLFile($main_url, HTML5DOMDocument::ALLOW_DUPLICATE_IDS, $stream_context);
+debug_log("Loaded main page: " . $main_url);
+
+// detect article items
 $main_view = $main_document->querySelector('div.view-articles div.view-content');
 $article_cards = $main_view->querySelectorAll('div.card-block');
+debug_log("Detected article items: " . $article_cards->length);
 
 // extract article URLs from main page
 $main_page_article_urls = array();
@@ -61,40 +85,50 @@ foreach ($article_cards as $article_card) {
     $article_url = $base_url . $article_url_path;
     array_push($main_page_article_urls, $article_url);
 }
+debug_log("Extracted article URLs: " . count($main_page_article_urls));
 
 // determine which articles are missing from database
 $main_not_present_in_saved = array_diff($main_page_article_urls, $saved_article_urls);
+debug_log("Counted missing articles: " . count($main_not_present_in_saved));
 
 // for each missing article...
 foreach ($main_not_present_in_saved as $article_url) {
 
-    // load article page as DOM object
+    // load article
     $article_document = new HTML5DOMDocument();
-    $article_document->loadHTMLFile($article_url);
-    
-    // extract title and perform fixes
-    $title = $article_document
+    $article_document->loadHTMLFile($article_url, HTML5DOMDocument::ALLOW_DUPLICATE_IDS, $stream_context);
+    $article = $article_document->querySelector('div.contenthiner');
+
+    // extract title
+    $title = $article
         ->querySelector('.field--name-node-title h2')
         ?->textContent;
     $title = trim($title);
     $title = str_replace('html5-dom-document-internal-entity1-quot-end', '"', $title);
+
+    // debug_log($title);
     
-    // extract date and time and convert to timestamp and rss date
-    $date_time = $article_document
+    // extract date
+    $date_time = $article
         ->querySelector('div.field--name-node-post-date div.field__item span.item')
         ?->textContent;
+        $date_time = trim($date_time);
     $date_time = DateTime::createFromFormat('d.m.Y G:i', $date_time);
     $timestamp = $date_time->getTimestamp();
     $date_time_rss = $date_time->format(DateTime::RSS);
 
-    // extract content and set as description
-    $content_body = $article_document->querySelector('div.field--name-field-body');
-    $content_formatted = $article_document->querySelector('div.field--name-field-text-formatted');
-    $content_object = ($content_body ?? $content_formatted);
-    $description = $content_object->innerHTML;
+    // debug_log($date_time_rss);
 
-    // extract image path
-    $image_path = $article_document
+    // extract content
+    $content_body = $article;
+    $content_body->querySelector('div.nodecats')?->remove();
+    $content_body->querySelector('div.field--name-field-tags')?->remove();
+    $content_body->querySelector('span.a2a_kit')?->remove();
+    $content_body->querySelector('div.field--name-field-source')?->remove();
+    $description = htmlspecialchars($content_body->innerHTML);
+
+    // extract image
+    $image_path = $article
         ->querySelector('img.image-style-article-cover')
         ?->getAttribute('src');
     $image_url = $image_path ? $base_url . $image_path : null;
@@ -105,14 +139,14 @@ foreach ($main_not_present_in_saved as $article_url) {
     }
 
     // add new item to database (url, title, timestamp, date_time_rss, description, image_url,)
+    $query = "INSERT OR REPLACE INTO articles VALUES ('$article_url', '$title', $timestamp, '$date_time_rss', '$description', '$image_url')";
     try {
-        $query = "INSERT OR REPLACE INTO articles VALUES ('$article_url', '$title', $timestamp, '$date_time_rss', '$description', '$image_url')";
         $database->prepare($query)->execute();
     } catch (PDOException) {
-        if ($is_debug) {
-            echo 'Failed to insert article at ' . $article_url . '<br>';
-        }
+        debug_log("Failed to insert article: " . $article_url);
+        continue;
     }
+    debug_log("Article loaded and saved: " . $article_url);
 }
 
 // sort database and remove excess positions
@@ -151,21 +185,9 @@ foreach ($final_articles as $article) {
 
 // generate rss
 $rss_xml = $rss->asXML();
-
-// debug print output
 if ($is_debug) {
-    // print execution time
-    $end_time = new DateTime();
-    $end_time = $end_time->format('H:i:s:u');
-    echo $start_time . ' <- start time<br>' . $end_time . ' <- end time<br><hr>';
-
-    // print preview
-    $preview = new DOMDocument;
-    $preview->preserveWhiteSpace = false;
-    $preview->formatOutput = true;
-    $preview->loadXML($rss_xml);
-    header('Content-Type: text/html');
-    echo '<pre style="white-space: pre-wrap;">' . htmlentities($preview->saveXML()) . '</pre>';
+    echo "<hr>";
+    pretty_dump($rss_xml);
 } else {
     header('Content-Type: application/rss+xml');
     echo $rss_xml;
