@@ -11,15 +11,8 @@ function debug_log($message) {
         $now = new DateTime();
         $duration = $now->diff($log_time)->format("%s.%F s");
         error_log("$message ($duration)");
-        echo "<code>[$duration]</code> $message<br>";
+        echo "<pre>[$duration] $message</pre>";
         // $log_time = $now;
-    }
-}
-
-function pretty_dump($object) {
-    global $is_debug;
-    if ($is_debug) {
-        echo "<pre>"; var_dump($object); echo "</pre>";
     }
 }
 
@@ -57,6 +50,8 @@ $saved_article_urls = $database
     ->query('SELECT url FROM articles')
     ->fetchAll();
 $saved_article_urls = array_map(fn($x) => $x['url'], $saved_article_urls);
+$existing_articles_count = count($saved_article_urls);
+debug_log("Read $existing_articles_count existing articles from database");
 
 // define website constants
 $site_title = 'DlaPilota.pl';
@@ -92,12 +87,17 @@ $main_not_present_in_saved = array_diff($main_page_article_urls, $saved_article_
 debug_log("Counted missing articles: " . count($main_not_present_in_saved));
 
 // for each missing article...
+$not_present_count = count($main_not_present_in_saved);
+$index = 0;
 foreach ($main_not_present_in_saved as $article_url) {
+    $index++;
 
     // load article
     $article_document = new HTML5DOMDocument();
     $article_document->loadHTMLFile($article_url, HTML5DOMDocument::ALLOW_DUPLICATE_IDS, $stream_context);
     $article = $article_document->querySelector('div.contenthiner');
+
+    debug_log("($index/$not_present_count) URL: ".$article_url);
 
     // extract title
     $title = $article
@@ -105,9 +105,9 @@ foreach ($main_not_present_in_saved as $article_url) {
         ?->textContent;
     $title = trim($title);
     $title = str_replace('html5-dom-document-internal-entity1-quot-end', '"', $title);
-
-    // debug_log($title);
     
+    debug_log("TITLE: ".$title);
+
     // extract date
     $date_time = $article
         ->querySelector('div.field--name-node-post-date div.field__item span.item')
@@ -117,7 +117,7 @@ foreach ($main_not_present_in_saved as $article_url) {
     $timestamp = $date_time->getTimestamp();
     $date_time_rss = $date_time->format(DateTime::RSS);
 
-    // debug_log($date_time_rss);
+    debug_log("DATE: ".$date_time_rss);
 
     // extract content
     $content_body = $article;
@@ -125,7 +125,9 @@ foreach ($main_not_present_in_saved as $article_url) {
     $content_body->querySelector('div.field--name-field-tags')?->remove();
     $content_body->querySelector('span.a2a_kit')?->remove();
     $content_body->querySelector('div.field--name-field-source')?->remove();
-    $description = htmlspecialchars($content_body->innerHTML);
+    $description = htmlentities($content_body->innerHTML);
+
+    debug_log("CONTENT: ".strlen($description));
 
     // extract image
     $image_path = $article
@@ -133,35 +135,34 @@ foreach ($main_not_present_in_saved as $article_url) {
         ?->getAttribute('src');
     $image_url = $image_path ? $base_url . $image_path : null;
 
-    // append image to description if present
-    if ($image_url) {
-        $description = '<img src="' . $image_url . '"><br>' . $description;
-    }
-
     // add new item to database (url, title, timestamp, date_time_rss, description, image_url,)
     $query = "INSERT OR REPLACE INTO articles VALUES ('$article_url', '$title', $timestamp, '$date_time_rss', '$description', '$image_url')";
     try {
         $database->prepare($query)->execute();
-    } catch (PDOException) {
+    } catch (PDOException $e) {
         debug_log("Failed to insert article: " . $article_url);
+        debug_log($e);
+        debug_log($query);
         continue;
     }
-    debug_log("Article loaded and saved: " . $article_url);
 }
+debug_log("Inserted $not_present_count articles to database");
 
 // sort database and remove excess positions
+$excess_count = 30;
 $delete_over_limit = <<<EOD
-DELETE FROM articles WHERE
-timestamp NOT IN (
-    SELECT timestamp FROM articles ORDER BY timestamp DESC LIMIT 30
+DELETE FROM articles WHERE timestamp NOT IN (
+    SELECT timestamp FROM articles ORDER BY timestamp DESC LIMIT $excess_count
 )
 EOD;
 $database->prepare($delete_over_limit)->execute();
+debug_log("Removed excess articles over $excess_count from database");
 
 // read final articles from database
 $final_articles = $database
     ->query('SELECT * FROM articles ORDER BY timestamp DESC')
     ->fetchAll();
+debug_log("Refetched articles from database");
 
 // prepare RSS container
 $rss = new SimpleXMLElement('<?xml version="1.0" encoding="UTF-8" ?><rss version="2.0" />');
@@ -182,12 +183,12 @@ foreach ($final_articles as $article) {
     $item->addChild('pubDate', $article['date_time_rss']);
     $item->addChild('description', $article['description']);
 }
+debug_log("Created RSS feed object");
 
 // generate rss
 $rss_xml = $rss->asXML();
 if ($is_debug) {
-    echo "<hr>";
-    pretty_dump($rss_xml);
+    debug_log("HERE RSS WILL BE ECHOED FOR NON-DEBUG RUN");
 } else {
     header('Content-Type: application/rss+xml');
     echo $rss_xml;
