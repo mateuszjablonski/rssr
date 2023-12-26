@@ -125,7 +125,7 @@ foreach ($main_not_present_in_saved as $article_url) {
     $content_body->querySelector('div.field--name-field-tags')?->remove();
     $content_body->querySelector('span.a2a_kit')?->remove();
     $content_body->querySelector('div.field--name-field-source')?->remove();
-    $description = htmlentities($content_body->innerHTML);
+    $description = $content_body->innerHTML;
 
     debug_log("CONTENT: ".strlen($description));
 
