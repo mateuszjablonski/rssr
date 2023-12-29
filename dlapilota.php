@@ -150,12 +150,15 @@ foreach ($articles_missing as $article_url) {
 
     // extract content
     $content_body = $article;
+    $content_body->querySelector("div.field--name-node-post-date")?->remove();
+    $content_body->querySelector("div.field--name-field-source")?->remove();
+    $content_body->querySelector("div.field--name-node-title")?->remove();
     $content_body->querySelector("div.nodecats")?->remove();
     $content_body->querySelector("div.field--name-field-tags")?->remove();
     $content_body->querySelector("span.a2a_kit")?->remove();
     $content_body->querySelector("div.field--name-field-source")?->remove();
     $description = $content_body->innerHTML;
-    $description = $indenter->indent($description);
+    $description = htmlspecialchars($indenter->indent($description));
 
     debug_log("Content size: " . strlen($description), true);
 
@@ -169,7 +172,7 @@ foreach ($articles_missing as $article_url) {
     } catch (PDOException $e) {
         debug_log("Failed to insert article: " . $article_url);
         debug_log($e, true);
-        debug_log(htmlspecialchars($description), true);
+        debug_log($description, true);
         continue;
     }
 }
