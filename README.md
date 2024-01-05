@@ -17,3 +17,15 @@ brew install --formula php
 brew install --formula composer
 composer install
 ```
+
+## Used packages
+
+https://github.com/ivopetkov/html5-dom-document-php - proper DOM Document access for HTML5 websites
+https://github.com/gajus/dindent - HTML formatter
+
+https://github.com/guzzle/guzzle/ - HTTP client (not yet used)
+
+## Future work
+
+- creating base classes for separating tasks and streamlining processes
+- using [Atom](<https://en.wikipedia.org/wiki/Atom_(web_standard)#Example_of_an_Atom_1.0_feed>) instead of RSS 1.0
